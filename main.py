@@ -4,6 +4,8 @@ import os
 WORKDIR = os.path.dirname(os.path.abspath(__file__))
 IMAGES_PATH = os.path.join(WORKDIR, 'images_gz2', 'images') # supondo que vamos usar o dataset do kaggle: https://www.kaggle.com/datasets/jaimetrickz/galaxy-zoo-2-images
 
+# classificação dos registros do dataset: https://data.galaxyzoo.org/
+
 
 def main ():
 
