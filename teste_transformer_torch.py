@@ -24,17 +24,17 @@ import os
 DATA_PATH = './data'
 IMAGES_PATH = f'{DATA_PATH}/images'
 
-TOTAL_SAMPLES = 1000
+TOTAL_SAMPLES = 10000
 
-WIDTH = 224
+WIDTH = 500
 
 TRAIN = True
 MODEL_TO_LOAD = 'saved.pth'
 N_TRAINING = 2048
 N_VALIDATION = 512
-N_EPOCH = 8 # Com poucas epocas, já funciona.
+N_EPOCH = 1 # Com poucas epocas, já funciona.
 LEARNING_RATE = 0.001
-BATCH_SIZE = 4
+BATCH_SIZE = 1
 
 DEVICE = torch.device ('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -54,11 +54,11 @@ def coletaImagensLabels():
 
     for id, row in classes.iterrows():
         if row['simple_class'] == 'elliptical':
-            classes.at[id, 'simple_class'] = 0.0
+            classes.at[id, 'simple_class'] = 0
         elif row['simple_class'] == 'spiral':
-            classes.at[id, 'simple_class'] = 1.0
+            classes.at[id, 'simple_class'] = 1
         else:
-            classes.at[id, 'simple_class'] = 2.0
+            classes.at[id, 'simple_class'] = 2
 
     filename_mapping = pd.read_csv(f'{DATA_PATH}/gz2_filename_mapping.csv')
 
@@ -75,11 +75,12 @@ def coletaImagensLabels():
         asset_id = filename_mapping[filename_mapping['objid'] == obj_id]['asset_id'].values[0]
         
         if not os.path.exists(f'{IMAGES_PATH}/{asset_id}.jpg'):
-            print(f'{IMAGES_PATH}/{asset_id}.jpg')
+            # print(f'{IMAGES_PATH}/{asset_id}.jpg')
             continue
         
         image = cv.imread(f'{IMAGES_PATH}/{asset_id}.jpg', cv.IMREAD_COLOR)
         image = image.astype (np.float32) / 255
+        image = cv2.resize(image, (224, 224))
 
         images.append(image)
         labels.append(sample["simple_class"])
@@ -190,7 +191,7 @@ if TRAIN:
         param.requires_grad = False        
     # Adiciona uma camada para as 3 saídas.
     nn.heads.head = torch.nn.Sequential (torch.nn.Linear (nn.heads.head.in_features, 3), torch.nn.Softmax (dim=1))
-    print (nn)
+    # print (nn)
     nn.to (DEVICE)
 
     images, labels = coletaImagensLabels()
