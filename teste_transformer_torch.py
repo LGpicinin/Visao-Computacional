@@ -4,6 +4,8 @@
 # Teste usando a ViT nativa do PyTorch pré-treinada no ImageNet, com transfer
 # learning ajustando somente a última camada.
 
+from cProfile import label
+from email.mime import image
 import random
 import cv2
 import numpy as np
@@ -11,11 +13,13 @@ import torch
 import torchvision
 from torch.utils.data import TensorDataset, DataLoader
 import matplotlib.pyplot as plt
-from sklearn.model_selection import train_test_split
+# from sklearn.model_selection import train_test_split
 import pandas as pd
 import cv2 as cv
+from cv2 import Mat
 import matplotlib.pyplot as plt
 import os
+from torch.utils.data import Dataset
 
 #===============================================================================
 # CONFIG
@@ -23,6 +27,11 @@ import os
 
 DATA_PATH = './data'
 IMAGES_PATH = f'{DATA_PATH}/images'
+
+CLASS_FILE = os.path.join(DATA_PATH, "gz2_hart16.csv")
+MAPPING_FILE = os.path.join(DATA_PATH, "gz2_filename_mapping.csv")
+
+LABEL_FILE = os.path.join(DATA_PATH, "labels.csv")
 
 TOTAL_SAMPLES = 10000
 
@@ -40,9 +49,39 @@ DEVICE = torch.device ('cuda' if torch.cuda.is_available() else 'cpu')
 
 ESC_KEY = 27
 
-def coletaImagensLabels():
+
+class CustomImageDataset(Dataset):
+    def __init__(self, annotations_file, img_dir, transform=None, target_transform=None):
+        self.img_labels = pd.read_csv(annotations_file)
+        self.img_dir = img_dir
+        self.transform = transform
+        self.target_transform = target_transform
+
+    def __len__(self):
+        return len(self.img_labels)
+
+    def __getitem__(self, idx):
+        img_path = os.path.join(self.img_dir, self.img_labels.iloc[idx, 'image_name'])
+        image = cv.imread(img_path, cv.IMREAD_COLOR)
+        label = self.img_labels.iloc[idx, "simple_class"]
+        if self.transform:
+            image = self.transform(image)
+        if self.target_transform:
+            label = self.target_transform(label)
+        return image, label
     
-    classes = pd.read_csv(f"{DATA_PATH}/gz2_hart16.csv", usecols=['dr7objid', 'gz2_class'])
+
+def alteraImagem(image: Mat):
+    image = image.astype (np.float32) / 255
+    image = cv2.resize(image, (224, 224))
+    return image
+
+
+def alteraLabels():
+    '''
+        Função que salva csv com nome da imagem e respectiva label
+    '''
+    classes = pd.read_csv(CLASS_FILE, usecols=['dr7objid', 'gz2_class'])
 
     classes['simple_class'] = (
         classes['gz2_class']
@@ -60,32 +99,36 @@ def coletaImagensLabels():
         else:
             classes.at[id, 'simple_class'] = 2
 
-    filename_mapping = pd.read_csv(f'{DATA_PATH}/gz2_filename_mapping.csv')
+    filename_mapping = pd.read_csv(MAPPING_FILE)
 
-    images = []
-    labels = []
-
+    classes['image_name'] = ""
     count = 0
+
     for id, sample in classes.iterrows():
         if count == TOTAL_SAMPLES:
             break
         count = count + 1
 
         obj_id = sample['dr7objid']
-        asset_id = filename_mapping[filename_mapping['objid'] == obj_id]['asset_id'].values[0]
-        
-        if not os.path.exists(f'{IMAGES_PATH}/{asset_id}.jpg'):
+        image_name = filename_mapping[filename_mapping['objid'] == obj_id]['asset_id'].values[0]
+
+        if not os.path.exists(f'{IMAGES_PATH}/{image_name}.jpg'):
             # print(f'{IMAGES_PATH}/{asset_id}.jpg')
             continue
-        
-        image = cv.imread(f'{IMAGES_PATH}/{asset_id}.jpg', cv.IMREAD_COLOR)
-        image = image.astype (np.float32) / 255
-        image = cv2.resize(image, (224, 224))
 
-        images.append(image)
-        labels.append(sample["simple_class"])
+        classes.at[id, 'image_name'] = image_name
 
-    return images, labels
+    cols = ["image_name", "simple_class"]
+    for col in classes.columns:
+        if col not in cols:
+            classes = classes.drop(columns=[col])
+
+    for id, sample in classes.iterrows():
+        if sample['image_name'] == "":
+            classes = classes.drop(index=[id])
+
+    classes.to_csv(LABEL_FILE)
+
 
 
 #===============================================================================
@@ -193,19 +236,20 @@ if TRAIN:
     nn.heads.head = torch.nn.Sequential (torch.nn.Linear (nn.heads.head.in_features, 3), torch.nn.Softmax (dim=1))
     # print (nn)
     nn.to (DEVICE)
+    
+    alteraLabels()
 
-    images, labels = coletaImagensLabels()
+    dataset = CustomImageDataset(LABEL_FILE, IMAGES_PATH, alteraImagem, None)
+
+    # train_x, validation_x, train_y, validation_y = train_test_split(image, label, test_size=0.2, random_state=42)
 
     
-    train_x, validation_x, train_y, validation_y = train_test_split(images, labels, test_size=0.2, random_state=42)
-
+    # train_x = np.array(train_x)
+    # validation_x = np.array(validation_x)
+    # train_y = np.array(train_y)
+    # validation_y = np.array(validation_y)
     
-    train_x = np.array(train_x)
-    validation_x = np.array(validation_x)
-    train_y = np.array(train_y)
-    validation_y = np.array(validation_y)
-    
-    trainNetwork (nn, train_x, train_y, validation_x, validation_y)
+    # trainNetwork (nn, train_x, train_y, validation_x, validation_y)
 # else:
 #     nn = torchvision.models.vit_b_32 ()
 #     # Adiciona uma camada para as 3 saídas.
