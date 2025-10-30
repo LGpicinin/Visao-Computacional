@@ -13,7 +13,7 @@ import torch
 import torchvision
 from torch.utils.data import TensorDataset, DataLoader
 import matplotlib.pyplot as plt
-# from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split
 import pandas as pd
 import cv2 as cv
 from cv2 import Mat
@@ -61,7 +61,7 @@ class CustomImageDataset(Dataset):
         return len(self.img_labels)
 
     def __getitem__(self, idx):
-        img_path = os.path.join(self.img_dir, self.img_labels.iloc[idx, 'image_name'])
+        img_path = os.path.join(self.img_dir, self.img_labels.iloc[idx, 'image_name'], '.jpg')
         image = cv.imread(img_path, cv.IMREAD_COLOR)
         label = self.img_labels.iloc[idx, "simple_class"]
         if self.transform:
@@ -82,6 +82,7 @@ def alteraLabels():
         Função que salva csv com nome da imagem e respectiva label
     '''
     classes = pd.read_csv(CLASS_FILE, usecols=['dr7objid', 'gz2_class'])
+    classes = classes.sample(TOTAL_SAMPLES)
 
     classes['simple_class'] = (
         classes['gz2_class']
@@ -90,44 +91,26 @@ def alteraLabels():
             .replace('^S.*$', 'spiral', regex=True)
             .replace('^A$', 'artifact_or_star', regex=True)        
     )
-
-    for id, row in classes.iterrows():
-        if row['simple_class'] == 'elliptical':
-            classes.at[id, 'simple_class'] = 0
-        elif row['simple_class'] == 'spiral':
-            classes.at[id, 'simple_class'] = 1
-        else:
-            classes.at[id, 'simple_class'] = 2
+    
+    classes['label'] = (
+        classes['simple_class']
+            .str
+            .replace('elliptical', '0')
+            .replace('spiral', '1')
+            .replace('artifact_or_star', '2')
+            .astype(np.int8)
+    )
 
     filename_mapping = pd.read_csv(MAPPING_FILE)
 
-    classes['image_name'] = ""
-    count = 0
-
-    for id, sample in classes.iterrows():
-        if count == TOTAL_SAMPLES:
-            break
-        count = count + 1
-
-        obj_id = sample['dr7objid']
-        image_name = filename_mapping[filename_mapping['objid'] == obj_id]['asset_id'].values[0]
-
-        if not os.path.exists(f'{IMAGES_PATH}/{image_name}.jpg'):
-            # print(f'{IMAGES_PATH}/{asset_id}.jpg')
-            continue
-
-        classes.at[id, 'image_name'] = image_name
+    classes = classes.merge(filename_mapping, left_on='dr7objid', right_on='objid')
+    
+    classes = classes.rename(columns={'asset_id': 'image_name'})
 
     cols = ["image_name", "simple_class"]
-    for col in classes.columns:
-        if col not in cols:
-            classes = classes.drop(columns=[col])
+    classes = classes[cols]
 
-    for id, sample in classes.iterrows():
-        if sample['image_name'] == "":
-            classes = classes.drop(index=[id])
-
-    classes.to_csv(LABEL_FILE)
+    classes.to_csv(LABEL_FILE, index=False)
 
 
 
@@ -239,9 +222,12 @@ if TRAIN:
     
     alteraLabels()
 
-    dataset = CustomImageDataset(LABEL_FILE, IMAGES_PATH, alteraImagem, None)
-
-    # train_x, validation_x, train_y, validation_y = train_test_split(image, label, test_size=0.2, random_state=42)
+    dataset = CustomImageDataset(LABEL_FILE, IMAGES_PATH, alteraImagem, torchvision.transforms.ToTensor())
+    
+    train, validation = torch.utils.data.random_split(dataset, [0.8, 0.2])
+    train_dataloader = DataLoader(train, 500, shuffle=True)
+    validation_dataloader = DataLoader(validation, 500)
+    # train_x, validation_x, train_y, validation_y = train_test_split(dataset, test_size=0.2, random_state=42)
 
     
     # train_x = np.array(train_x)
@@ -249,7 +235,7 @@ if TRAIN:
     # train_y = np.array(train_y)
     # validation_y = np.array(validation_y)
     
-    # trainNetwork (nn, train_x, train_y, validation_x, validation_y)
+    trainNetwork (nn, train_x, train_y, validation_x, validation_y)
 # else:
 #     nn = torchvision.models.vit_b_32 ()
 #     # Adiciona uma camada para as 3 saídas.
