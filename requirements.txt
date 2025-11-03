@@ -20,7 +20,6 @@ PyQt6==6.9.1
 PyQt6-Qt6==6.9.2
 PyQt6_sip==13.10.2
 python-dateutil==2.9.0.post0
-pytorch-triton-rocm==3.5.0+git7416ffcb
 pytz==2025.2
 scikit-learn==1.7.2
 scipy==1.16.2
