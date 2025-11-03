@@ -12,6 +12,7 @@ import numpy as np
 import torch
 import torchvision
 from torch.utils.data import TensorDataset, DataLoader
+from torch.optim.lr_scheduler import StepLR
 import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 import pandas as pd
@@ -20,6 +21,8 @@ from cv2 import Mat
 import matplotlib.pyplot as plt
 import os
 from torch.utils.data import Dataset
+from tempfile import TemporaryDirectory
+import time
 
 #===============================================================================
 # CONFIG
@@ -117,91 +120,162 @@ def alteraLabels():
 #===============================================================================
 # TREINO
 #===============================================================================
+# código tirado daqui (acom algumas adaptações): https://docs.pytorch.org/tutorials/beginner/transfer_learning_tutorial.html
+def train_model(model, dataloaders, criterion, optimizer, scheduler, num_epochs=25):
+    since = time.time()
 
-def trainNetwork (nn, train_x, train_y, validation_x, validation_y):
-    '''Gera exemplos aleatórios e treina uma CNN.'''
+    # Create a temporary directory to save training checkpoints
+    with TemporaryDirectory() as tempdir:
+        best_model_params_path = os.path.join(tempdir, 'best_model_params.pt')
 
-    criterion = torch.nn.CrossEntropyLoss ()
-    optimizer = torch.optim.Adam (nn.parameters(), lr=LEARNING_RATE)
+        torch.save(model.state_dict(), best_model_params_path)
+        best_acc = 0.0
 
-    # Converte para tensores.
-    train_x = torch.tensor (train_x.transpose((0,3,1,2)))
-    train_y = torch.tensor (train_y)
-    validation_x = torch.tensor (validation_x.transpose((0,3,1,2)), dtype=torch.float32)
-    validation_y = torch.tensor (validation_y)
+        for epoch in range(num_epochs):
+            print(f'Epoch {epoch}/{num_epochs - 1}')
+            print('-' * 10)
 
-    # Normalização.
-    # Não é estritamente necessário para treinar do zero, esta média e desvio-
-    # padrão são importantes para usar o modelo pré-treinado no imagenet.
-    norm = torchvision.transforms.Normalize (mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-    train_x = norm (train_x)
-    validation_x = norm (validation_x)
+            # Each epoch has a training and validation phase
+            for phase in ['train', 'val']:
+                if phase == 'train':
+                    model.train()  # Set model to training mode
+                else:
+                    model.eval()   # Set model to evaluate mode
 
-    train_dataset = TensorDataset (train_x, train_y)
-    val_dataset = TensorDataset (validation_x, validation_y)
-    train_loader = DataLoader (train_dataset, batch_size=BATCH_SIZE, shuffle=True)
-    val_loader = DataLoader (val_dataset, batch_size=BATCH_SIZE, shuffle=False)
+                running_loss = 0.0
+                running_corrects = 0
 
-    train_losses, val_losses, train_accs, val_accs = [], [], [], []
+                # Iterate over data.
+                for inputs, labels in dataloaders[phase]:
+                    inputs = inputs.to(DEVICE)
+                    labels = labels.to(DEVICE)
+
+                    # zero the parameter gradients
+                    optimizer.zero_grad()
+
+                    # forward
+                    # track history if only in train
+                    with torch.set_grad_enabled(phase == 'train'):
+                        outputs = model(inputs)
+                        _, preds = torch.max(outputs, 1)
+                        loss = criterion(outputs, labels)
+
+                        # backward + optimize only if in training phase
+                        if phase == 'train':
+                            loss.backward()
+                            optimizer.step()
+
+                    # statistics
+                    running_loss += loss.item() * inputs.size(0)
+                    running_corrects += torch.sum(preds == labels.data)
+                if phase == 'train':
+                    scheduler.step()
+
+                epoch_loss = running_loss / dataloaders[phase].__len__
+                epoch_acc = running_corrects.double() / dataloaders[phase].__len__
+
+                print(f'{phase} Loss: {epoch_loss:.4f} Acc: {epoch_acc:.4f}')
+
+                # deep copy the model
+                if phase == 'val' and epoch_acc > best_acc:
+                    best_acc = epoch_acc
+                    torch.save(model.state_dict(), best_model_params_path)
+
+            print()
+
+        time_elapsed = time.time() - since
+        print(f'Training complete in {time_elapsed // 60:.0f}m {time_elapsed % 60:.0f}s')
+        print(f'Best val Acc: {best_acc:4f}')
+
+        # load best model weights
+        model.load_state_dict(torch.load(best_model_params_path, weights_only=True))
+    return model
 
 
-    # Para cada época...
-    for epoch in range(N_EPOCH):
-        nn.train ()
-        running_loss, correct, total = 0.0, 0, 0
+# def trainNetwork (nn, train_x, train_y, validation_x, validation_y):
+#     '''Gera exemplos aleatórios e treina uma CNN.'''
 
-        for inputs, labels in train_loader:
-            inputs, labels = inputs.to(DEVICE), labels.to(DEVICE)
+#     criterion = torch.nn.CrossEntropyLoss ()
+#     optimizer = torch.optim.Adam (nn.parameters(), lr=LEARNING_RATE)
 
-            optimizer.zero_grad ()
-            outputs = nn (inputs)
-            loss = criterion (outputs, labels)
-            loss.backward ()
-            optimizer.step ()
+#     # Converte para tensores.
+#     train_x = torch.tensor (train_x.transpose((0,3,1,2)))
+#     train_y = torch.tensor (train_y)
+#     validation_x = torch.tensor (validation_x.transpose((0,3,1,2)), dtype=torch.float32)
+#     validation_y = torch.tensor (validation_y)
 
-            running_loss += loss.item() * inputs.size(0)
-            _, predicted = torch.max(outputs, 1)
-            total += labels.size(0)
-            correct += (predicted == labels).sum().item()
+#     # Normalização.
+#     # Não é estritamente necessário para treinar do zero, esta média e desvio-
+#     # padrão são importantes para usar o modelo pré-treinado no imagenet.
+#     norm = torchvision.transforms.Normalize (mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+#     train_x = norm (train_x)
+#     validation_x = norm (validation_x)
 
-        train_losses.append(running_loss / total)
-        train_accs.append(correct / total)
+#     train_dataset = TensorDataset (train_x, train_y)
+#     val_dataset = TensorDataset (validation_x, validation_y)
+#     train_loader = DataLoader (train_dataset, batch_size=BATCH_SIZE, shuffle=True)
+#     val_loader = DataLoader (val_dataset, batch_size=BATCH_SIZE, shuffle=False)
 
-        # Validação
-        nn.eval()
-        val_loss, correct, total = 0.0, 0, 0
-        with torch.no_grad():
-            for inputs, labels in val_loader:
-                inputs, labels = inputs.to(DEVICE), labels.to(DEVICE)
-                outputs = nn (inputs)
-                loss = criterion(outputs, labels)
-                val_loss += loss.item() * inputs.size(0)
-                _, predicted = torch.max(outputs, 1)
-                total += labels.size(0)
-                correct += (predicted == labels).sum().item()
+#     train_losses, val_losses, train_accs, val_accs = [], [], [], []
 
-        val_losses.append(val_loss / total)
-        val_accs.append(correct / total)
 
-        print(f"Epoch {epoch+1}/{N_EPOCH}, "
-              f"Train Loss: {train_losses[-1]:.4f}, Train Acc: {train_accs[-1]:.4f}, "
-              f"Val Loss: {val_losses[-1]:.4f}, Val Acc: {val_accs[-1]:.4f}")
+#     # Para cada época...
+#     for epoch in range(N_EPOCH):
+#         nn.train ()
+#         running_loss, correct, total = 0.0, 0, 0
 
-        # Salva melhor modelo
-        if val_accs[-1] == max(val_accs):
-            torch.save(nn.state_dict(), "saved.pth")
+#         for inputs, labels in train_loader:
+#             inputs, labels = inputs.to(DEVICE), labels.to(DEVICE)
 
-    # Plots
-    plt.plot(train_losses, label='train_loss')
-    plt.plot(val_losses, label='val_loss')
-    plt.legend()
-    plt.savefig("training.png")
-    plt.clf()
+#             optimizer.zero_grad ()
+#             outputs = nn (inputs)
+#             loss = criterion (outputs, labels)
+#             loss.backward ()
+#             optimizer.step ()
 
-    plt.plot(train_accs, label='train_acc')
-    plt.plot(val_accs, label='val_acc')
-    plt.legend()
-    plt.savefig("training_acc.png")
+#             running_loss += loss.item() * inputs.size(0)
+#             _, predicted = torch.max(outputs, 1)
+#             total += labels.size(0)
+#             correct += (predicted == labels).sum().item()
+
+#         train_losses.append(running_loss / total)
+#         train_accs.append(correct / total)
+
+#         # Validação
+#         nn.eval()
+#         val_loss, correct, total = 0.0, 0, 0
+#         with torch.no_grad():
+#             for inputs, labels in val_loader:
+#                 inputs, labels = inputs.to(DEVICE), labels.to(DEVICE)
+#                 outputs = nn (inputs)
+#                 loss = criterion(outputs, labels)
+#                 val_loss += loss.item() * inputs.size(0)
+#                 _, predicted = torch.max(outputs, 1)
+#                 total += labels.size(0)
+#                 correct += (predicted == labels).sum().item()
+
+#         val_losses.append(val_loss / total)
+#         val_accs.append(correct / total)
+
+#         print(f"Epoch {epoch+1}/{N_EPOCH}, "
+#               f"Train Loss: {train_losses[-1]:.4f}, Train Acc: {train_accs[-1]:.4f}, "
+#               f"Val Loss: {val_losses[-1]:.4f}, Val Acc: {val_accs[-1]:.4f}")
+
+#         # Salva melhor modelo
+#         if val_accs[-1] == max(val_accs):
+#             torch.save(nn.state_dict(), "saved.pth")
+
+#     # Plots
+#     plt.plot(train_losses, label='train_loss')
+#     plt.plot(val_losses, label='val_loss')
+#     plt.legend()
+#     plt.savefig("training.png")
+#     plt.clf()
+
+#     plt.plot(train_accs, label='train_acc')
+#     plt.plot(val_accs, label='val_acc')
+#     plt.legend()
+#     plt.savefig("training_acc.png")
 
 
 #===============================================================================
@@ -234,8 +308,18 @@ if TRAIN:
     # validation_x = np.array(validation_x)
     # train_y = np.array(train_y)
     # validation_y = np.array(validation_y)
+    dataloaders = {
+        'train': train_dataloader,
+        'val': validation_dataloader
+    }
+
+    criterion = torch.nn.CrossEntropyLoss ()
+    optimizer = torch.optim.Adam (nn.parameters(), lr=LEARNING_RATE)
+    scheduler = StepLR(optimizer, step_size=30, gamma=0.1)
+
+    train_model(nn, criterion, optimizer, scheduler, N_EPOCH)
     
-    trainNetwork (nn, train_x, train_y, validation_x, validation_y)
+    # trainNetwork (nn, train_x, train_y, validation_x, validation_y)
 # else:
 #     nn = torchvision.models.vit_b_32 ()
 #     # Adiciona uma camada para as 3 saídas.
