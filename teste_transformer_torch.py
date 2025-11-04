@@ -22,6 +22,7 @@ import matplotlib.pyplot as plt
 import os
 from torch.utils.data import Dataset
 from tempfile import TemporaryDirectory
+from tqdm import tqdm
 import time
 
 #===============================================================================
@@ -36,17 +37,18 @@ MAPPING_FILE = os.path.join(DATA_PATH, "gz2_filename_mapping.csv")
 
 LABEL_FILE = os.path.join(DATA_PATH, "labels.csv")
 
-TOTAL_SAMPLES = 10000
+TOTAL_SAMPLES = 50000
 
 WIDTH = 500
 
 TRAIN = True
 MODEL_TO_LOAD = 'saved.pth'
-N_TRAINING = 2048
-N_VALIDATION = 512
+TRAIN_SPLIT = 0.8
+VALIDATION_SPLIT = 0.2
 N_EPOCH = 1 # Com poucas epocas, já funciona.
 LEARNING_RATE = 0.001
 BATCH_SIZE = 1
+DATALOADER_BATCH = 2000
 
 DEVICE = torch.device ('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -64,9 +66,10 @@ class CustomImageDataset(Dataset):
         return len(self.img_labels)
 
     def __getitem__(self, idx):
-        img_path = os.path.join(self.img_dir, self.img_labels.iloc[idx, 'image_name'], '.jpg')
+        img_path = os.path.join(self.img_dir, str(self.img_labels.loc[idx, 'image_name']))
+        img_path = f'{img_path}.jpg'
         image = cv.imread(img_path, cv.IMREAD_COLOR)
-        label = self.img_labels.iloc[idx, "simple_class"]
+        label = self.img_labels.loc[idx, "label"]
         if self.transform:
             image = self.transform(image)
         if self.target_transform:
@@ -77,7 +80,8 @@ class CustomImageDataset(Dataset):
 def alteraImagem(image: Mat):
     image = image.astype (np.float32) / 255
     image = cv2.resize(image, (224, 224))
-    return image
+    
+    return torch.tensor(image.transpose((2, 0, 1)))
 
 
 def alteraLabels():
@@ -95,13 +99,13 @@ def alteraLabels():
             .replace('^A$', 'artifact_or_star', regex=True)        
     )
     
-    classes['label'] = (
+    classes['label'] = pd.to_numeric(
         classes['simple_class']
             .str
             .replace('elliptical', '0')
             .replace('spiral', '1')
             .replace('artifact_or_star', '2')
-            .astype(np.int8)
+            
     )
 
     filename_mapping = pd.read_csv(MAPPING_FILE)
@@ -110,8 +114,13 @@ def alteraLabels():
     
     classes = classes.rename(columns={'asset_id': 'image_name'})
 
-    cols = ["image_name", "simple_class"]
+    cols = ["image_name", "label"]
     classes = classes[cols]
+    classes = classes[[
+        os.path.isfile(
+            f'{os.path.join(IMAGES_PATH, str(img_name))}.jpg' 
+        ) for img_name in classes['image_name']
+    ]]
 
     classes.to_csv(LABEL_FILE, index=False)
 
@@ -121,7 +130,7 @@ def alteraLabels():
 # TREINO
 #===============================================================================
 # código tirado daqui (acom algumas adaptações): https://docs.pytorch.org/tutorials/beginner/transfer_learning_tutorial.html
-def train_model(model, dataloaders, criterion, optimizer, scheduler, num_epochs=25):
+def train_model(model, dataloaders, dataset_sizes, criterion, optimizer, scheduler, num_epochs=25):
     since = time.time()
 
     # Create a temporary directory to save training checkpoints
@@ -146,7 +155,7 @@ def train_model(model, dataloaders, criterion, optimizer, scheduler, num_epochs=
                 running_corrects = 0
 
                 # Iterate over data.
-                for inputs, labels in dataloaders[phase]:
+                for inputs, labels in tqdm(dataloaders[phase]):
                     inputs = inputs.to(DEVICE)
                     labels = labels.to(DEVICE)
 
@@ -171,8 +180,8 @@ def train_model(model, dataloaders, criterion, optimizer, scheduler, num_epochs=
                 if phase == 'train':
                     scheduler.step()
 
-                epoch_loss = running_loss / dataloaders[phase].__len__
-                epoch_acc = running_corrects.double() / dataloaders[phase].__len__
+                epoch_loss = running_loss / dataset_sizes[phase]
+                epoch_acc = running_corrects.double() / dataset_sizes[phase]
 
                 print(f'{phase} Loss: {epoch_loss:.4f} Acc: {epoch_acc:.4f}')
 
@@ -296,11 +305,11 @@ if TRAIN:
     
     alteraLabels()
 
-    dataset = CustomImageDataset(LABEL_FILE, IMAGES_PATH, alteraImagem, torchvision.transforms.ToTensor())
+    dataset = CustomImageDataset(LABEL_FILE, IMAGES_PATH, alteraImagem, torch.tensor)
     
-    train, validation = torch.utils.data.random_split(dataset, [0.8, 0.2])
-    train_dataloader = DataLoader(train, 500, shuffle=True)
-    validation_dataloader = DataLoader(validation, 500)
+    train, validation = torch.utils.data.random_split(dataset, [TRAIN_SPLIT, VALIDATION_SPLIT])
+    train_dataloader = DataLoader(train, DATALOADER_BATCH, shuffle=True)
+    validation_dataloader = DataLoader(validation, DATALOADER_BATCH)
     # train_x, validation_x, train_y, validation_y = train_test_split(dataset, test_size=0.2, random_state=42)
 
     
@@ -312,12 +321,17 @@ if TRAIN:
         'train': train_dataloader,
         'val': validation_dataloader
     }
+    
+    dataset_sizes = {
+        'train': TOTAL_SAMPLES * TRAIN_SPLIT,
+        'val': TOTAL_SAMPLES * VALIDATION_SPLIT
+    }
 
     criterion = torch.nn.CrossEntropyLoss ()
     optimizer = torch.optim.Adam (nn.parameters(), lr=LEARNING_RATE)
     scheduler = StepLR(optimizer, step_size=30, gamma=0.1)
 
-    train_model(nn, criterion, optimizer, scheduler, N_EPOCH)
+    train_model(nn, dataloaders, dataset_sizes, criterion, optimizer, scheduler, N_EPOCH)
     
     # trainNetwork (nn, train_x, train_y, validation_x, validation_y)
 # else:
