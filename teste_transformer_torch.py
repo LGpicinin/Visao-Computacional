@@ -4,23 +4,18 @@
 # Teste usando a ViT nativa do PyTorch pré-treinada no ImageNet, com transfer
 # learning ajustando somente a última camada.
 
-from cProfile import label
-from email.mime import image
 import random
 import cv2
 import numpy as np
 import torch
 import torchvision
-from torch.utils.data import TensorDataset, DataLoader
+from torch.utils.data import Dataset, DataLoader
 from torch.optim.lr_scheduler import StepLR
-import matplotlib.pyplot as plt
-from sklearn.model_selection import train_test_split
 import pandas as pd
 import cv2 as cv
 from cv2 import Mat
 import matplotlib.pyplot as plt
 import os
-from torch.utils.data import Dataset
 from tempfile import TemporaryDirectory
 from tqdm import tqdm
 import time
@@ -39,9 +34,9 @@ LABEL_FILE = os.path.join(DATA_PATH, "labels.csv")
 
 TOTAL_SAMPLES = 50000
 
-WIDTH = 500
+WIDTH = 224
 
-TRAIN = True
+TRAIN = False
 MODEL_TO_LOAD = 'saved.pth'
 TRAIN_SPLIT = 0.8
 VALIDATION_SPLIT = 0.2
@@ -334,36 +329,41 @@ if TRAIN:
     train_model(nn, dataloaders, dataset_sizes, criterion, optimizer, scheduler, N_EPOCH)
     
     # trainNetwork (nn, train_x, train_y, validation_x, validation_y)
-# else:
-#     nn = torchvision.models.vit_b_32 ()
-#     # Adiciona uma camada para as 3 saídas.
-#     nn.heads.head = torch.nn.Sequential (torch.nn.Linear (nn.heads.head.in_features, 3), torch.nn.Softmax (dim=1))
-#     print (nn)
-#     nn.to (DEVICE)
-#     nn.load_state_dict (torch.load (MODEL_TO_LOAD, weights_only=True, map_location=DEVICE))
-#     nn.eval()
+else:
+    nn = torchvision.models.vit_b_32 ()
+    # Adiciona uma camada para as 3 saídas.
+    nn.heads.head = torch.nn.Sequential (torch.nn.Linear (nn.heads.head.in_features, 3), torch.nn.Softmax (dim=1))
+    nn.to (DEVICE)
+    nn.load_state_dict (torch.load (MODEL_TO_LOAD, weights_only=True, map_location=DEVICE))
+    nn.eval()
 
-#     # Testa. Gera imagens de teste uma a uma.
-#     img = np.empty ((1, WIDTH, WIDTH, 3), np.float32)
-#     key = 'a'
-#     while key != ESC_KEY:
-#         generateImage (img [0])
-#         tensor_img = torch.tensor (img.transpose ((0,3,1,2))).to(DEVICE)
+    key = 'a'
+    while key != ESC_KEY:
+        cv2.destroyAllWindows()
+        data = pd.read_csv(LABEL_FILE)
+        sample = data.sample(1)
+        img_name = sample['image_name'].values[0]
+        label = sample['label'].values[0]
+        
+        if not os.path.exists(f'{IMAGES_PATH}/{img_name}.jpg'):
+            print(f'{IMAGES_PATH}/{img_name}.jpg')
+            continue
+        
+        image = cv.imread(f'{IMAGES_PATH}/{img_name}.jpg', cv.IMREAD_COLOR)
+        # tensor_img = np.empty((1, 3, WIDTH, WIDTH), np.float32)
+        # tensor_img[0] = alteraImagem(image).unsqueeze(0)
+        tensor_img = alteraImagem(image).unsqueeze(0)
 
-#         with torch.no_grad():
-#             result = nn (tensor_img)
+        with torch.no_grad():
+            result = nn (tensor_img)
 
-#         print('%.4f %.4f %.4f' % (result[0][0], result[0][1], result[0][2]))
+        print('%.4f %.4f %.4f' % (result[0][0], result[0][1], result[0][2]))
 
-#         shape = np.argmax (result[0])        
-#         if shape == 0:
-#             print ('Circulo')
-#         elif shape == 1:
-#             print ('Retangulo')
-#         else:
-#             print ('Triângulo')
+        result = np.argmax (result[0])      
+        labels = ['elliptical', 'spiral', 'artifact_or_star']  
+        print(f'Predict: {labels[result]}, real: {labels[label]}')
 
-#         cv2.imshow ('oi', img [0])
-#         key = cv2.waitKey ()
+        cv2.imshow (f'{img_name}', image)
+        key = cv2.waitKey ()
 
-#     cv2.destroyAllWindows ()
+    cv2.destroyAllWindows ()
