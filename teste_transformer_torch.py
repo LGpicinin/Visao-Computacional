@@ -36,7 +36,7 @@ TOTAL_SAMPLES = 239695
 
 WIDTH = 224
 
-TRAIN = False
+TRAIN = True
 MODEL_TO_LOAD = 'saved.pth'
 TRAIN_SPLIT = 0.5
 VALIDATION_SPLIT = 0.2
@@ -278,7 +278,7 @@ else:
     nn.to (DEVICE)
     nn.load_state_dict (torch.load (MODEL_TO_LOAD, weights_only=True, map_location=DEVICE))
     nn.eval()
-    
+
     alteraLabels()
 
     if SHOW_IMAGES:
@@ -322,14 +322,17 @@ else:
 
     total = conf_mat.sum()
     accuracy = conf_mat.trace() / total if total > 0 else 0.0
-    print(f"Overall accuracy: {accuracy:.4f}")
+    with open('all.txt', 'w') as f:
+        print(f"Overall accuracy: {accuracy:.4f}")
+        f.write(f"Overall accuracy: {accuracy:.4f}\n")
 
-    # per-class precision, recall, f1
-    for i in range(num_classes):
-        tp = conf_mat[i, i]
-        fp = conf_mat[:, i].sum() - tp
-        fn = conf_mat[i, :].sum() - tp
-        prec = tp / (tp + fp) if (tp + fp) > 0 else 0.0
-        rec = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-        f1 = 2 * prec * rec / (prec + rec) if (prec + rec) > 0 else 0.0
-        print(f"Class {i}: precision={prec:.4f} recall={rec:.4f} f1={f1:.4f}")
+        # per-class precision, recall, f1
+        for i in range(num_classes):
+            tp = conf_mat[i, i]
+            fp = conf_mat[:, i].sum() - tp
+            fn = conf_mat[i, :].sum() - tp
+            prec = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+            rec = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+            f1 = 2 * prec * rec / (prec + rec) if (prec + rec) > 0 else 0.0
+            print(f"Class {i}: precision={prec:.4f} recall={rec:.4f} f1={f1:.4f}")
+            f.write(f"Class {i}: precision={prec:.4f} recall={rec:.4f} f1={f1:.4f}\n")
