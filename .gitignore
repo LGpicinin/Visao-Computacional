@@ -1,3 +1,6 @@
 *.jpg
 venv/
 gz2_hart16.csv
+*.txt
+*.pth
+*/__pycache__
