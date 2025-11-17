@@ -8,6 +8,7 @@ from lib.constants import *
 from lib.functions import showImages, alteraImagem
 from lib.classes import CustomImageDataset
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+import matplotlib.pyplot as plt
 
 
 SHOW_IMAGES = False
@@ -55,22 +56,22 @@ with torch.no_grad():
         inputs = inputs.to(DEVICE)
         labels = labels.to(DEVICE).long().view(-1)
 
-        y_test.append(labels)
 
         outputs = nn(inputs)
         preds = torch.argmax(outputs, dim=1)
 
-        predictions.append(preds)
-
         preds_cpu = preds.cpu().numpy()
         labels_cpu = labels.cpu().numpy()
         for t, p in zip(labels_cpu, preds_cpu):
+            y_test.append(t)
+            predictions.append(p)
             conf_mat[t, p] += 1
         all_preds.append(preds_cpu)
         all_labels.append(labels_cpu)
 
-# cm = confusion_matrix(y_test, predictions)
-# ConfusionMatrixDisplay(cm).plot() 
+cm = confusion_matrix(y_test, predictions)
+ConfusionMatrixDisplay(cm).plot() 
+plt.show()
 
 if len(all_preds) > 0:
     all_preds = np.concatenate(all_preds)
