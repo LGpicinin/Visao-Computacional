@@ -4,6 +4,7 @@ import torchvision
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import StepLR
 import os
+import numpy as np
 from lib.constants import *
 from lib.classes import CustomImageDataset
 from lib.functions import alteraImagem, alteraLabels, train_model
@@ -11,9 +12,9 @@ from lib.functions import alteraImagem, alteraLabels, train_model
 
 random.seed (1)
 
-if not os.path.exists(LABEL_FILE):
-    print(f"Criando {LABEL_FILE}")
-    alteraLabels()
+# if not os.path.exists(LABEL_FILE):
+print(f"Criando {LABEL_FILE}")
+alteraLabels()
 
 
 # fixa a semente para o gerador do número aleatório para que divisão treino/validação/teste
@@ -56,7 +57,17 @@ dataset_sizes = {
     'val': TOTAL_SAMPLES * VALIDATION_SPLIT
 }
 
-criterion = torch.nn.CrossEntropyLoss ()
+# Calculate class frequencies
+unique_labels, counts = np.unique(dataset.img_labels['label'], return_counts=True)
+class_frequencies = counts / len(dataset.img_labels)
+ 
+# Calculate class weights as the inverse of frequencies
+class_weights = 1.0 / class_frequencies
+ 
+# Convert to PyTorch tensor
+class_weights = torch.tensor(class_weights, dtype=torch.float32)
+
+criterion = torch.nn.CrossEntropyLoss (weight=class_weights)
 optimizer = torch.optim.Adam (nn.parameters(), lr=LEARNING_RATE)
 scheduler = StepLR(optimizer, step_size=30, gamma=0.1)
 train_model(nn, dataloaders, dataset_sizes, criterion, optimizer, scheduler, N_EPOCH)

@@ -74,6 +74,8 @@ def alteraLabels():
             
     )
 
+    classes = classes[classes['label'] != 2]
+
     filename_mapping = pd.read_csv(MAPPING_FILE)
 
     classes = classes.merge(filename_mapping, left_on='dr7objid', right_on='objid')
