@@ -27,12 +27,19 @@ train, validation, test = torch.utils.data.random_split(
                                 [TRAIN_SPLIT, VALIDATION_SPLIT, TEST_SPLIT]
                             )
 
-nn = torchvision.models.vit_b_32 ()
+model, _ = MODEL_AND_WEIGHT
+nn = model ()
+if isinstance(nn, torchvision.models.efficientnet.EfficientNet):
+    nn.classifier = torch.nn.Sequential (
+            torch.nn.Linear (nn.classifier[-1].in_features, 2), 
+            torch.nn.Softmax (dim=1)
+        )
+else:
 # Adiciona uma camada para as 3 saídas.
-nn.heads.head = torch.nn.Sequential (
-                    torch.nn.Linear (nn.heads.head.in_features, 3), 
-                    torch.nn.Softmax (dim=1)
-                )
+    nn.heads.head = torch.nn.Sequential (
+            torch.nn.Linear (nn.heads.head.in_features, 2), 
+            torch.nn.Softmax (dim=1)
+        )
 
 nn.to (DEVICE)
 nn.load_state_dict (torch.load (MODEL_TO_LOAD, weights_only=True, map_location=DEVICE))
