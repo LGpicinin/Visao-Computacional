@@ -9,7 +9,7 @@ MAPPING_FILE = os.path.join(DATA_PATH, "gz2_filename_mapping.csv")
 
 LABEL_FILE = os.path.join(DATA_PATH, "labels.csv")
 
-TOTAL_SAMPLES = 5000
+TOTAL_SAMPLES = 239695 # 239695 é o max
 
 WIDTH = 224
 
@@ -17,7 +17,7 @@ MODEL_TO_LOAD = os.path.join(DATA_PATH, "saved.pth")
 TRAIN_SPLIT = 0.5
 VALIDATION_SPLIT = 0.2
 TEST_SPLIT = 0.3
-N_EPOCH = 1 # Com poucas epocas, já funciona.
+N_EPOCH = 4 # Com poucas epocas, já funciona.
 LEARNING_RATE = 0.001
 DATALOADER_BATCH = 2000
 
