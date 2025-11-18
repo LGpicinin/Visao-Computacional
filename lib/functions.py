@@ -12,7 +12,7 @@ from lib.constants import *
 
 def alteraImagem(image: Mat):
     image = image.astype (np.float32) / 255
-    image = cv2.resize(image, (224, 224))
+    image = cv2.resize(image, (WIDTH, WIDTH))
     
     return torch.tensor(image.transpose((2, 0, 1)))
 

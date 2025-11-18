@@ -37,11 +37,17 @@ nn = model (weights = weights)
 for param in nn.parameters(): # Congela tudo para o transfer learning.
     param.requires_grad = False        
 
+if isinstance(nn, torchvision.models.efficientnet.EfficientNet):
+    nn.classifier = torch.nn.Sequential (
+            torch.nn.Linear (nn.classifier[-1].in_features, 2), 
+            torch.nn.Softmax (dim=1)
+        )
+else:
 # Adiciona uma camada para as 3 saídas.
-nn.heads.head = torch.nn.Sequential (
-        torch.nn.Linear (nn.heads.head.in_features, 3), 
-        torch.nn.Softmax (dim=1)
-    )
+    nn.heads.head = torch.nn.Sequential (
+            torch.nn.Linear (nn.heads.head.in_features, 2), 
+            torch.nn.Softmax (dim=1)
+        )
 
 # print (nn)
 nn.to (DEVICE)
