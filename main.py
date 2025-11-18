@@ -31,7 +31,8 @@ train, validation, test = torch.utils.data.random_split(
 # Treina modelo.
 
 # Gera a rede.
-nn = torchvision.models.vit_b_32 (weights = 'ViT_B_32_Weights.IMAGENET1K_V1')
+model, weights = MODEL_AND_WEIGHT
+nn = model (weights = weights)
 
 for param in nn.parameters(): # Congela tudo para o transfer learning.
     param.requires_grad = False        
