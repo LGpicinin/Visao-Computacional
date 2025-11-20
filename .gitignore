@@ -4,3 +4,6 @@ gz2_hart16.csv
 *.txt
 *.pth
 */__pycache__
+*.pt
+*.png
+training_configs.json

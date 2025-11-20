@@ -77,5 +77,5 @@ class_weights = torch.tensor(class_weights, dtype=torch.float32)
 criterion = torch.nn.CrossEntropyLoss (weight=class_weights)
 optimizer = torch.optim.Adam (nn.parameters(), lr=LEARNING_RATE)
 scheduler = StepLR(optimizer, step_size=30, gamma=0.1)
-train_model(nn, dataloaders, dataset_sizes, criterion, optimizer, scheduler, N_EPOCH)
+train_model(nn, dataloaders, dataset_sizes, criterion, optimizer, scheduler)
 

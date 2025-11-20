@@ -5,7 +5,7 @@ import torchvision
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from lib.constants import *
-from lib.functions import showImages, alteraImagem
+from lib.functions import showImages, alteraImagem, alteraLabels
 from lib.classes import CustomImageDataset
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 import matplotlib.pyplot as plt
@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 
 SHOW_IMAGES = False
 
+alteraLabels()
 random.seed (1)
 
 # fixa a semente para o gerador do número aleatório para que divisão treino/validação/teste
