@@ -94,6 +94,56 @@ def alteraLabels():
 
     classes.to_csv(LABEL_FILE, index=False)
 
+def controiDataframePesos() -> pd.DataFrame:
+    '''
+        Função que retorna dataframe com nome da imagem e pesos de cada classe
+    '''
+    cols = []
+    classes = pd.read_csv(CLASS_FILE)
+    classes = classes.sample(TOTAL_SAMPLES)
+    for col in classes.columns:
+        if "t01_smooth_or_features" in col and "debiased" in col:
+            cl = "disk" if "disk" in col else ("star" if "star" in col else "smooth")
+            classes[cl] = classes[col]
+            cols.append(cl)
+
+
+    classes['simple_class'] = (
+        classes['gz2_class']
+            .str
+            .replace('^E.*$', 'elliptical', regex=True)
+            .replace('^S.*$', 'spiral', regex=True)
+            .replace('^A$', 'artifact_or_star', regex=True)        
+    )
+    
+    classes['label'] = pd.to_numeric(
+        classes['simple_class']
+            .str
+            .replace('elliptical', '0')
+            .replace('spiral', '1')
+            .replace('artifact_or_star', '2')
+            
+    )
+
+    classes = classes[classes['label'] != 2]
+
+    filename_mapping = pd.read_csv(MAPPING_FILE)
+
+    classes = classes.merge(filename_mapping, left_on='dr7objid', right_on='objid')
+    
+    classes = classes.rename(columns={'asset_id': 'image_name'})
+
+    cols.append("image_name")
+    classes = classes[cols]
+    classes = classes[[
+        os.path.isfile(
+            f'{os.path.join(IMAGES_PATH, str(img_name))}.jpg' 
+        ) for img_name in classes['image_name']
+    ]]
+
+    return classes
+
+    
 
 
 # código tirado daqui (acom algumas adaptações): https://docs.pytorch.org/tutorials/beginner/transfer_learning_tutorial.html
