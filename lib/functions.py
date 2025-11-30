@@ -57,7 +57,7 @@ def alteraLabels():
         Função que salva csv com nome da imagem e respectiva label
     '''
     classes = pd.read_csv(CLASS_FILE, usecols=['dr7objid', 'gz2_class'])
-    classes = classes.sample(TOTAL_SAMPLES)
+    classes = classes.sample(TOTAL_SAMPLES, random_state=2)
 
     classes['simple_class'] = (
         classes['gz2_class']
@@ -100,7 +100,7 @@ def controiDataframePesos() -> pd.DataFrame:
     '''
     cols = []
     classes = pd.read_csv(CLASS_FILE)
-    classes = classes.sample(TOTAL_SAMPLES)
+    classes = classes.sample(TOTAL_SAMPLES, random_state=2)
     for col in classes.columns:
         if "t01_smooth_or_features" in col and "debiased" in col:
             cl = "disk" if "disk" in col else ("star" if "star" in col else "smooth")
@@ -124,6 +124,8 @@ def controiDataframePesos() -> pd.DataFrame:
             .replace('artifact_or_star', '2')
             
     )
+
+    cols.append("label")
 
     classes = classes[classes['label'] != 2]
 

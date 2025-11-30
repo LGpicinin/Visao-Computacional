@@ -5,16 +5,16 @@ import torchvision
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from lib.constants import *
-from lib.functions import showImages, alteraImagem, alteraLabels
+from lib.functions import showImages, alteraImagem, alteraLabels, controiDataframePesos
 from lib.classes import CustomImageDataset
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 import matplotlib.pyplot as plt
-
+import pandas as pd
 
 SHOW_IMAGES = False
 
 alteraLabels()
-random.seed (1)
+# random.seed (1)
 
 # fixa a semente para o gerador do número aleatório para que divisão treino/validação/teste
 # seja sempre a mesma (isso é feito para que tanto no arquivo main.py quanto no metrics.py
@@ -27,6 +27,10 @@ train, validation, test = torch.utils.data.random_split(
                                 dataset, 
                                 [TRAIN_SPLIT, VALIDATION_SPLIT, TEST_SPLIT]
                             )
+
+df_pesos = controiDataframePesos()
+df_pesos = df_pesos.iloc[test.indices]
+
 
 model, _ = MODEL_AND_WEIGHT
 nn = model ()
@@ -88,9 +92,33 @@ else:
     all_preds = np.array([])
     all_labels = np.array([])
 
+# constroi dataframe com as predições e as labels de cada registro junto com os 
+# respectivos pesos dados para cada classe. Controi um dataframe com predições
+# corretas e outro com as incorretas
+count = 0
+df_pesos["labels"] = -1
+df_pesos["preds"] = -1
+df_pesos["wrong"] = False
+for index, row in df_pesos.iterrows():
+    if row['label'] != y_test[count]:
+        print("error")
+        exit()
+    df_pesos.at[index, "labels"] = y_test[count]
+    df_pesos.at[index, "preds"] = predictions[count]
+    if y_test[count] != predictions[count]:
+        df_pesos.at[index, "wrong"] = True
 
-# print("Confusion matrix (rows=true, cols=predicted):")
-# print(conf_mat)
+    count += 1
+
+# cria dataframe com predições corretas e outro com incorretas
+df_pesos_wrong = df_pesos[df_pesos["wrong"]==True]
+df_pesos_right = df_pesos[df_pesos["wrong"]==False]
+
+# salva dataframes
+df_pesos_wrong.to_csv(os.path.join(DATA_PATH, "pesos_wrong_en.csv"), index=False)
+df_pesos_right.to_csv(os.path.join(DATA_PATH, "pesos_right_en.csv"), index=False)
+
+
 total = conf_mat.sum()
 accuracy = conf_mat.trace() / total if total > 0 else 0.0
 
